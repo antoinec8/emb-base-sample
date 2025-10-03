@@ -1,3 +1,9 @@
 menu "Zephyr"
 source "Kconfig.zephyr"
 endmenu
+
+config HELLO_TIMER_INTERVAL
+    int "Timer interval in milliseconds"
+    default 1000
+    help
+      Defines the interval in milliseconds between Hello World messages.
