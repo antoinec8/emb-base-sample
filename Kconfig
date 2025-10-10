@@ -2,8 +2,32 @@ menu "Zephyr"
 source "Kconfig.zephyr"
 endmenu
 
-config HELLO_TIMER_INTERVAL
-    int "Timer interval in milliseconds"
-    default 1000
+config LED_PIN
+    int "GPIO pin number for LED"
+    default 2
     help
-      Defines the interval in milliseconds between Hello World messages.
+      GPIO pin number for controlling the LED
+
+config BUTTON_PIN
+    int "GPIO pin number for Button"
+    default 3
+    help
+      GPIO pin number for the button input
+
+config PWM_DUTY_CYCLE_MIN
+    int "Minimum PWM duty cycle"
+    default 0
+    help
+      Minimum PWM duty cycle value (0-100)
+
+config PWM_DUTY_CYCLE_MAX
+    int "Maximum PWM duty cycle"
+    default 100
+    help
+      Maximum PWM duty cycle value (0-100)
+
+config PWM_FADE_STEP
+    int "PWM fade step"
+    default 5
+    help
+      Step value for PWM fade effect (1-100)

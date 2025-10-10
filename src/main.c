@@ -1,51 +1,71 @@
-#include <zephyr/kernel.h>      // Funções básicas do Zephyr
-#include <zephyr/logging/log.h> // Sistema de logging do Zephyr
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL); // Registra o módulo de log
+#define LED_NODE DT_ALIAS(led0)
+#define SW_NODE DT_ALIAS(sw0)
 
-// Define o timer
-struct k_timer hello_timer;
+static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED_NODE, gpios);
+static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(SW_NODE, gpios);
 
-// Callback do timer
-void timer_handler(struct k_timer *timer)
+LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
+
+static struct gpio_callback button_cb;
+static bool toggle_mode = false;
+
+static void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-    static uint32_t count = 0;
-    count++;
-
-    // Usando diferentes níveis de log
-    // Log normal
-    LOG_INF("Hello World! Count: %d", count);
-    
-    // Log de aviso quando o count é múltiplo de 5
-    if (count % 5 == 0) {
-        LOG_WRN("Reached multiple of 5 counts!");
-    }
-
-    // Log de erro quando o count é múltiplo de 10
-    if (count % 10 == 0) {
-        LOG_ERR("Reached multiple of 10 counts!");
-    }
-
-    LOG_DBG("Debug message - Timer fired!");
+    toggle_mode = !toggle_mode;
+    printk("Mode changed to: %s\n", toggle_mode ? "PWM" : "Digital");
 }
 
-int main(void)
+void main(void)
 {
-    LOG_INF("Initializing Hello World Timer Application");
+    int ret;
 
-    // Inicializa o timer
-    k_timer_init(&hello_timer, timer_handler, NULL);
-
-    // Inicia o timer com o intervalo definido no Kconfig (1 segundo)
-    k_timer_start(&hello_timer, K_MSEC(CONFIG_HELLO_TIMER_INTERVAL), 
-                  K_MSEC(CONFIG_HELLO_TIMER_INTERVAL));
-
-    LOG_INF("Timer started with interval of %d ms", CONFIG_HELLO_TIMER_INTERVAL);
-
-    // Loop infinito para manter o programa rodando
-    while (1) {
-        k_sleep(K_SECONDS(1));
+    if (!gpio_is_ready_dt(&led)) {
+        printk("Error: LED device not ready!\n");
+        return;
     }
 
-    return 0;
+    if (!gpio_is_ready_dt(&sw)) {
+        printk("Error: Button device not ready!\n");
+        return;
+    }
+
+    // Configura LED
+    ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0) {
+        printk("Error: LED pin configuration failed!\n");
+        return;
+    }
+
+    // Configura botão
+    ret = gpio_pin_configure_dt(&sw, GPIO_INPUT);
+    if (ret < 0) {
+        printk("Error: Button pin configuration failed!\n");
+        return;
+    }
+
+    // Configura callback do botão
+    ret = gpio_pin_interrupt_configure_dt(&sw, GPIO_INT_EDGE_TO_ACTIVE);
+    if (ret < 0) {
+        printk("Error: Button interrupt configuration failed!\n");
+        return;
+    }
+
+    gpio_init_callback(&button_cb, button_pressed, BIT(sw.pin));
+    gpio_add_callback(sw.port, &button_cb);
+
+    printk("Starting LED control demo\n");
+
+    while (1) {
+        gpio_pin_toggle_dt(&led);
+        if (toggle_mode) {
+            k_msleep(100);  // Modo rápido
+        } else {
+            k_msleep(500);  // Modo normal
+        }
+    }
 }
