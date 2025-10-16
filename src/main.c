@@ -1,71 +1,62 @@
 #include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/logging/log.h>
+#include "common.h"
+#include "geradora.h"
+#include "filtro.h"
+#include "processadora.h"
 
-#define LED_NODE DT_ALIAS(led0)
-#define SW_NODE DT_ALIAS(sw0)
+// Buffers para as filas
+char __aligned(4) input_msgq_buffer[MAX_QUEUE_SIZE * sizeof(struct sensor_data)];
+char __aligned(4) output_msgq_buffer[MAX_QUEUE_SIZE * sizeof(struct sensor_data)];
 
-static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED_NODE, gpios);
-static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(SW_NODE, gpios);
-
-LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
-
-static struct gpio_callback button_cb;
-static bool toggle_mode = false;
-
-static void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-    toggle_mode = !toggle_mode;
-    printk("Mode changed to: %s\n", toggle_mode ? "PWM" : "Digital");
-}
+// Definição das filas
+struct k_msgq input_msgq;
+struct k_msgq output_msgq;
 
 void main(void)
 {
-    int ret;
+    // Inicializa as filas de mensagens
+    k_msgq_init(&input_msgq, input_msgq_buffer, sizeof(struct sensor_data), 10);
+    k_msgq_init(&output_msgq, output_msgq_buffer, sizeof(struct sensor_data), 10);
 
-    if (!gpio_is_ready_dt(&led)) {
-        printk("Error: LED device not ready!\n");
-        return;
-    }
+    // Cria thread do sensor de temperatura
+    k_thread_create(&temp_thread,
+                   temp_stack_area,
+                   K_THREAD_STACK_SIZEOF(temp_stack_area),
+                   temp_thread_entry,
+                   NULL, NULL, NULL,
+                   THREAD_PRIORITY,
+                   0,
+                   K_NO_WAIT);
 
-    if (!gpio_is_ready_dt(&sw)) {
-        printk("Error: Button device not ready!\n");
-        return;
-    }
+    // Cria thread do sensor de umidade
+    k_thread_create(&humid_thread,
+                   humid_stack_area,
+                   K_THREAD_STACK_SIZEOF(humid_stack_area),
+                   humid_thread_entry,
+                   NULL, NULL, NULL,
+                   THREAD_PRIORITY,
+                   0,
+                   K_NO_WAIT);
 
-    // Configura LED
-    ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-    if (ret < 0) {
-        printk("Error: LED pin configuration failed!\n");
-        return;
-    }
+    // Cria thread do filtro
+    k_thread_create(&filter_thread,
+                   filter_stack_area,
+                   K_THREAD_STACK_SIZEOF(filter_stack_area),
+                   filter_thread_entry,
+                   NULL, NULL, NULL,
+                   THREAD_PRIORITY,
+                   0,
+                   K_NO_WAIT);
 
-    // Configura botão
-    ret = gpio_pin_configure_dt(&sw, GPIO_INPUT);
-    if (ret < 0) {
-        printk("Error: Button pin configuration failed!\n");
-        return;
-    }
+    // Cria thread consumidora
+    k_thread_create(&consumer_thread,
+                   consumer_stack_area,
+                   K_THREAD_STACK_SIZEOF(consumer_stack_area),
+                   consumer_thread_entry,
+                   NULL, NULL, NULL,
+                   THREAD_PRIORITY,
+                   0,
+                   K_NO_WAIT);
 
-    // Configura callback do botão
-    ret = gpio_pin_interrupt_configure_dt(&sw, GPIO_INT_EDGE_TO_ACTIVE);
-    if (ret < 0) {
-        printk("Error: Button interrupt configuration failed!\n");
-        return;
-    }
-
-    gpio_init_callback(&button_cb, button_pressed, BIT(sw.pin));
-    gpio_add_callback(sw.port, &button_cb);
-
-    printk("Starting LED control demo\n");
-
-    while (1) {
-        gpio_pin_toggle_dt(&led);
-        if (toggle_mode) {
-            k_msleep(100);  // Modo rápido
-        } else {
-            k_msleep(500);  // Modo normal
-        }
-    }
+    printk("Sistema de monitoramento iniciado!\n");
 }
