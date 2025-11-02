@@ -31,3 +31,22 @@ config PWM_FADE_STEP
     default 5
     help
       Step value for PWM fade effect (1-100)
+
+menu "SNTP Configuration"
+
+config SNTP_SERVER
+    string "SNTP server hostname"
+    default "pool.ntp.org"
+    help
+      Hostname or IP address of the SNTP server to use for time synchronization.
+      Examples: pool.ntp.org, time.google.com, 192.0.2.2
+
+config SNTP_SYNC_INTERVAL
+    int "SNTP synchronization interval (seconds)"
+    default 60
+    range 10 3600
+    help
+      Interval in seconds between SNTP synchronization attempts.
+      Minimum: 10 seconds, Maximum: 3600 seconds (1 hour)
+
+endmenu

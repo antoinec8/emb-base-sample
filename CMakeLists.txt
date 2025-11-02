@@ -7,4 +7,7 @@ target_sources(app PRIVATE
     src/geradora.c
     src/filtro.c
     src/processadora.c
+    src/sntp_client.c
+    src/logger_module.c
+    src/app_module.c
 )
